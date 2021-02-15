@@ -5,6 +5,8 @@ import numpy as np
 import functools
 from collections import OrderedDict
 
+from pprint import pprint
+
 from enterprise.signals import parameter
 from enterprise.signals import selections
 from enterprise.signals import signal_base
@@ -129,7 +131,9 @@ def model_singlepsr_noise(psr, tm_var=False, tm_linear=False,
 
     # timing model
     if not tm_var:
+        print("not tm_var")
         if (is_wideband and use_dmdata):
+            print("is_wideband and use_dmdata")
             if dmjump_var:
                 dmjump = parameter.Uniform(pmin=-0.005, pmax=0.005)
             else:
@@ -151,142 +155,39 @@ def model_singlepsr_noise(psr, tm_var=False, tm_linear=False,
                     dmjump_selection=selections.Selection(
                         selections.by_frontend))
         else:
+            print("not is_wideband and use_dmdata")
             s = gp_signals.TimingModel(use_svd=tm_svd, normed=tm_norm,
                                    coefficients=coefficients)
     else:
+        print("tm_var")
         # create new attribute for enterprise pulsar object
         psr.tmparams_orig = OrderedDict.fromkeys(psr.t2pulsar.pars())
         for key in psr.tmparams_orig:
             psr.tmparams_orig[key] = (psr.t2pulsar[key].val,
                                       psr.t2pulsar[key].err)
         if not tm_linear:
+            print("tm_linear is false")
             s = timing_block(tmparam_list=tmparam_list)
         else:
             pass
 
-    # red noise
-    if red_var:
-        s += red_noise_block(psd=psd, prior=amp_prior,
-                             components=components, gamma_val=gamma_val,
-                             coefficients=coefficients, select=red_select)
-
-    # DM variations
-    if dm_var:
-        if dm_type == 'gp':
-            if dmgp_kernel == 'diag':
-                s += dm_noise_block(gp_kernel=dmgp_kernel, psd=dm_psd,
-                                    prior=amp_prior, components=components,
-                                    gamma_val=gamma_dm_val,
-                                    coefficients=coefficients)
-            elif dmgp_kernel == 'nondiag':
-                s += dm_noise_block(gp_kernel=dmgp_kernel,
-                                    nondiag_kernel=dm_nondiag_kernel,
-                                    coefficients=coefficients)
-        elif dm_type == 'dmx':
-            s += chrom.dmx_signal(dmx_data=dmx_data[psr.name])
-        if dm_annual:
-            s += chrom.dm_annual_signal()
-        if chrom_gp:
-            s += chromatic_noise_block(gp_kernel=chrom_gp_kernel,
-                                       psd=chrom_psd, idx=chrom_idx,
-                                       components=components,
-                                       nondiag_kernel=chrom_kernel,
-                                       coefficients=coefficients)
-
-        if dm_expdip:
-            if dm_expdip_tmin is None and dm_expdip_tmax is None:
-                tmin = [psr.toas.min() / 86400 for ii in range(num_dmdips)]
-                tmax = [psr.toas.max() / 86400 for ii in range(num_dmdips)]
-            else:
-                tmin = (dm_expdip_tmin if isinstance(dm_expdip_tmin,list)
-                                     else [dm_expdip_tmin])
-                tmax = (dm_expdip_tmax if isinstance(dm_expdip_tmax,list)
-                                     else [dm_expdip_tmax])
-            if dmdip_seqname is not None:
-                dmdipname_base = (['dmexp_' + nm for nm in dmdip_seqname]
-                                   if isinstance(dmdip_seqname,list)
-                                   else ['dmexp_' + dmdip_seqname])
-            else:
-                dmdipname_base = ['dmexp_{0}'.format(ii+1)
-                                  for ii in range(num_dmdips)]
-
-            dm_expdip_idx = (dm_expdip_idx if isinstance(dm_expdip_idx,list)
-                                           else [dm_expdip_idx])
-            for dd in range(num_dmdips):
-                s += chrom.dm_exponential_dip(tmin=tmin[dd], tmax=tmax[dd],
-                                              idx=dm_expdip_idx[dd],
-                                              sign=dmexp_sign,
-                                              name=dmdipname_base[dd])
-        if dm_cusp:
-            if dm_cusp_tmin is None and dm_cusp_tmax is None:
-                tmin = [psr.toas.min() / 86400 for ii in range(num_dm_cusps)]
-                tmax = [psr.toas.max() / 86400 for ii in range(num_dm_cusps)]
-            else:
-                tmin = (dm_cusp_tmin if isinstance(dm_cusp_tmin,list)
-                                     else [dm_cusp_tmin])
-                tmax = (dm_cusp_tmax if isinstance(dm_cusp_tmax,list)
-                                     else [dm_cusp_tmax])
-            if dm_cusp_seqname is not None:
-                cusp_name_base = 'dm_cusp_'+dm_cusp_seqname+'_'
-            else:
-                cusp_name_base = 'dm_cusp_'
-            dm_cusp_idx = (dm_cusp_idx if isinstance(dm_cusp_idx,list)
-                                           else [dm_cusp_idx])
-            dm_cusp_sign = (dm_cusp_sign if isinstance(dm_cusp_sign,list)
-                                            else [dm_cusp_sign])
-            for dd in range(1,num_dm_cusps+1):
-                s += chrom.dm_exponential_cusp(tmin=tmin[dd-1],
-                                               tmax=tmax[dd-1],
-                                               idx=dm_cusp_idx,
-                                               sign=dm_cusp_sign[dd-1],
-                                               symmetric=dm_cusp_sym,
-                                               name=cusp_name_base+str(dd))
-        if dm_dual_cusp:
-            if dm_dual_cusp_tmin is None and dm_cusp_tmax is None:
-                tmin = psr.toas.min() / 86400
-                tmax = psr.toas.max() / 86400
-            else:
-                tmin = dm_dual_cusp_tmin
-                tmax = dm_dual_cusp_tmax
-            if dm_dual_cusp_seqname is not None:
-                dual_cusp_name_base = 'dm_dual_cusp_'+dm_cusp_seqname+'_'
-            else:
-                dual_cusp_name_base = 'dm_dual_cusp_'
-            for dd in range(1,num_dm_dual_cusps+1):
-                s += chrom.dm_dual_exp_cusp(tmin=tmin, tmax=tmax,
-                                            idx1=dm_dual_cusp_idx1,
-                                            idx2=dm_dual_cusp_idx2,
-                                            sign=dm_dual_cusp_sign,
-                                            symmetric=dm_dual_cusp_sym,
-                                            name=dual_cusp_name_base+str(dd))
-        if dm_sw_deter:
-            Tspan = psr.toas.max() - psr.toas.min()
-            s+=solar_wind_block(ACE_prior=True, include_swgp=dm_sw_gp,
-                                swgp_prior=swgp_prior, swgp_basis=swgp_basis,
-                                Tspan=Tspan)
-
     if extra_sigs is not None:
+        print("extra_sigs")
         s += extra_sigs
     # adding white-noise, and acting on psr objects
     if 'NANOGrav' in psr.flags['pta'] and not is_wideband:
+        print("s2 model")
         s2 = s + white_noise_block(vary=white_vary, inc_ecorr=True,
                 select=select)
         model = s2(psr)
     else:
+        print("s3 model")
         s3 = s + white_noise_block(vary=white_vary, inc_ecorr=False,
                 select=select)
         model = s3(psr)
 
     # set up PTA
     pta = signal_base.PTA([model])
-
-    # set white noise parameters
-    if not white_vary or (is_wideband and use_dmdata):
-        if noisedict is None:
-            print('No noise dictionary provided!...')
-        else:
-            noisedict = noisedict
-            pta.set_default_params(noisedict)
 
     return pta
 

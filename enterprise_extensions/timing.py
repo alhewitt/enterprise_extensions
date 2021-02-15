@@ -8,6 +8,8 @@ from enterprise.signals import parameter
 from enterprise.signals import signal_base
 from enterprise.signals import deterministic_signals
 
+from pprint import pprint
+
 # timing model delay
 @signal_base.function
 def tm_delay(residuals, t2pulsar, tmparams_orig, tmparams, which='all'):
@@ -22,7 +24,8 @@ def tm_delay(residuals, t2pulsar, tmparams_orig, tmparams, which='all'):
 
     :return: difference between new and old residuals in seconds
     """
-
+    print("tm_delay called")
+    
     if which == 'all': keys = tmparams_orig.keys()
     else: keys = which
 
@@ -37,7 +40,7 @@ def tm_delay(residuals, t2pulsar, tmparams_orig, tmparams, which='all'):
     # set to new values
     t2pulsar.vals(tmparams_vary)
     new_res = np.double(t2pulsar.residuals().copy())
-
+    print(t2pulsar.vals)
     # remmeber to set values back to originals
     t2pulsar.vals(OrderedDict(zip(keys,
                                   np.atleast_1d(np.double(orig_params[:,0])))))
@@ -54,11 +57,17 @@ def timing_block(tmparam_list=['RAJ', 'DECJ', 'F0', 'F1',
     Returns the timing model block of the model
     :param tmparam_list: a list of parameters to vary in the model
     """
+    print("timing_block called")
     # default 5-sigma prior above and below the parfile mean
     tm_params = parameter.Uniform(-5.0, 5.0, size=len(tmparam_list))
-
+    print("tm_params =") 
+    pprint(vars(tm_params))
+    print("tm_params._prior =")
+    pprint(vars(tm_params._prior))
     # timing model
     tm_func = tm_delay(tmparams=tm_params, which=tmparam_list)
+    print("tm_func =")
+    pprint(vars(tm_func))
     tm = deterministic_signals.Deterministic(tm_func, name='timing model')
 
     return tm
